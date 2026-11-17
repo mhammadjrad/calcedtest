@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121316">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="حاسبة الطباعة 3D">
+    <link rel="manifest" href="./manifest.webmanifest">
+    <link rel="icon" href="./icons/icon-192.png" type="image/png">
+
+    <title>حاسبة تكلفة الطباعة ثلاثية الأبعاد | 3D Print Cost Calculator</title>
+    <!-- تحميل مكتبة Tailwind CSS للتنسيق -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- تحميل خط Cairo للعربية و Inter للإنجليزية -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Cairo', 'Inter', 'sans-serif'],
+                        mono: ['Inter', 'monospace'],
+                    },
+                    colors: {
+                        bambu: {
+                            green: '#00AE42',
+                            greenHover: '#009639',
+                            darkBg: '#121316',
+                            cardBg: '#1B1D21',
+                            inputBg: '#25282E',
+                            border: '#2E323A',
+                            textMuted: '#9499A3'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* تخصيص شريط التمرير وأسهم حقول الأرقام */
+        body {
+            background-color: #121316;
+            color: #F3F4F6;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            opacity: 0.4;
+        }
+        .bambu-glow {
+            box-shadow: 0 0 25px rgba(0, 174, 66, 0.12);
+        }
+        /* تأثير الانتقال السلس للرسوم البيانية */
+        circle.donut-segment {
+            transition: stroke-dasharray 0.4s ease, stroke-dashoffset 0.4s ease;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-bambu-green selection:text-white">
+
+    <!-- إشعار منبثق مخصص (Toast Notification) بدلاً من alert() -->
+    <div id="toast" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 transform transition-all duration-300 translate-y-20 opacity-0 pointer-events-none">
+        <div class="bg-bambu-cardBg border border-bambu-green/60 text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3">
+            <span class="w-2.5 h-2.5 rounded-full bg-bambu-green animate-pulse"></span>
+            <span id="toast-message" class="text-sm font-medium">تم بنجاح</span>
+        </div>
+    </div>
+
+    <!-- الشريط العلوي (Header) -->
+    <header class="border-b border-bambu-border bg-bambu-cardBg/80 backdrop-blur-md sticky top-0 z-30">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <!-- الشعار والعنوان -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-bambu-green/15 border border-bambu-green/40 flex items-center justify-center text-bambu-green">
+                    <!-- أيقونة مكعب ثلاثي الأبعاد -->
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                    </svg>
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-bold tracking-tight text-white flex items-center gap-2">
+                        <span data-i18n="appTitle">حاسبة تكلفة الطباعة ثلاثية الأبعاد</span>
+                        <span class="hidden sm:inline-block text-[11px] font-mono px-2 py-0.5 rounded-full bg-bambu-green/20 text-bambu-green border border-bambu-green/30">STUDIO EDITION</span>
+                    </h1>
+                    <p class="text-xs text-bambu-textMuted hidden sm:block" data-i18n="appSubtitle">حساب دقيق لتكلفة الفيلمنت، الطاقة، استهلاك الطابعة، والتسعير</p>
+                </div>
+            </div>
+
+            <!-- أزرار التحكم العلوية -->
+            <div class="flex items-center gap-2 sm:gap-3">
+                <!-- اختيار العملة -->
+                <select id="currencySelect" aria-label="Currency" class="bg-bambu-inputBg border border-bambu-border text-gray-200 text-xs sm:text-sm rounded-lg px-2.5 py-2 focus:outline-none focus:border-bambu-green transition cursor-pointer font-mono">
+                    <option value="$">$ USD</option>
+                    <option value="€">€ EUR</option>
+                    <option value="£">£ GBP</option>
+                    <option value="SAR">SAR ر.س</option>
+                    <option value="AED">AED د.إ</option>
+                    <option value="SYP">SYP ل.س</option>
+                </select>
+
+                <!-- زر تبديل اللغة -->
+                <button id="langToggle" type="button" class="bg-bambu-inputBg hover:bg-bambu-border border border-bambu-border text-gray-200 text-xs sm:text-sm font-semibold px-3 py-2 rounded-lg transition flex items-center gap-1.5 cursor-pointer">
+                    <svg class="w-4 h-4 text-bambu-green" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"/>
+                    </svg>
+                    <span id="langLabel">English</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- المحتوى الرئيسي -->
+    <main class="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-grow">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+            <!-- العمود الأيمن/الأيسر: بطاقات المدخلات (7 أعمدة) -->
+            <div class="lg:col-span-7 space-y-5">
+
+                <!-- 1. إعدادات المادة (Material Settings) -->
+                <section class="bg-bambu-cardBg border border-bambu-border rounded-2xl p-5 shadow-lg">
+                    <div class="flex items-center justify-between mb-4 pb-3 border-b border-bambu-border/70">
+                        <div class="flex items-center gap-2.5">
+                            <span class="w-8 h-8 rounded-lg bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            </span>
+                            <h2 class="text-base font-bold text-white" data-i18n="secMaterial">1. إعدادات المادة (Material Settings)</h2>
+                        </div>
+                        <span class="text-xs font-mono text-bambu-textMuted" id="gramPriceBadge">$0.022 / g</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <!-- سعر البكرة -->
+                        <div>
+                            <label for="spoolPrice" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblSpoolPrice">سعر البكرة (Spool price)</label>
+                            <div class="relative">
+                                <input type="number" id="spoolPrice" value="22" min="0" step="0.5" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3.5 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-bambu-green transition">
+                                <span class="currency-symbol absolute inset-y-0 end-3 flex items-center text-xs text-bambu-textMuted font-mono pointer-events-none">$</span>
+                            </div>
+                        </div>
+
+                        <!-- وزن البكرة -->
+                        <div>
+                            <label for="spoolWeight" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblSpoolWeight">وزن البكرة (غ)</label>
+                            <div class="relative">
+                                <input type="number" id="spoolWeight" value="1000" min="1" step="50" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3.5 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-bambu-green transition">
+                                <span class="absolute inset-y-0 end-3 flex items-center text-xs text-bambu-textMuted font-mono pointer-events-none">g</span>
+                            </div>
+                        </div>
+
+                        <!-- الفيلمنت المستخدم -->
+                        <div>
+                            <label for="filamentUsed" class="block text-xs font-medium text-bambu-green font-semibold mb-1.5" data-i18n="lblFilamentUsed">الفيلمنت المستخدم (غ)</label>
+                            <div class="relative">
+                                <input type="number" id="filamentUsed" value="0" min="0" step="1" class="calc-input w-full bg-bambu-inputBg border border-bambu-green/50 rounded-xl px-3.5 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-bambu-green ring-1 ring-bambu-green/20 transition">
+                                <span class="absolute inset-y-0 end-3 flex items-center text-xs text-bambu-green font-mono pointer-events-none">g</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- خيار الطباعة متعددة الألوان AMS -->
+                    <div class="mt-4 pt-3 border-t border-bambu-border/50">
+                        <div class="flex items-center justify-between">
+                            <label for="amsToggle" class="flex items-center gap-2.5 cursor-pointer select-none">
+                                <input type="checkbox" id="amsToggle" class="w-4 h-4 rounded accent-bambu-green bg-bambu-inputBg border-bambu-border cursor-pointer">
+                                <span class="text-sm font-medium text-gray-200" data-i18n="lblMultiColor">الطباعة متعددة الألوان (Multi-color / AMS)</span>
+                            </label>
+                            <span class="text-xs text-bambu-textMuted" data-i18n="lblAmsHint">إضافة هدر تغيير الألوان</span>
+                        </div>
+
+                        <!-- حقل هدر الألوان يظهر عند التفعيل -->
+                        <div id="amsWasteContainer" class="hidden mt-3 bg-bambu-inputBg/60 border border-bambu-border rounded-xl p-3">
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                <label for="purgeWaste" class="text-xs font-medium text-gray-300" data-i18n="lblPurgeWaste">وزن هدر التنظيف / البرج (Purge & Tower waste)</label>
+                                <div class="relative w-full sm:w-40">
+                                    <input type="number" id="purgeWaste" value="0" min="0" step="1" class="calc-input w-full bg-bambu-cardBg border border-bambu-border rounded-lg px-3 py-1.5 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                    <span class="absolute inset-y-0 end-3 flex items-center text-xs text-bambu-textMuted font-mono">g</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 2. إعدادات الطاقة واستهلاك الماكينة (Energy & Machine Wear) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <!-- إعدادات الطاقة -->
+                    <section class="bg-bambu-cardBg border border-bambu-border rounded-2xl p-5 shadow-lg">
+                        <div class="flex items-center gap-2.5 mb-4 pb-3 border-b border-bambu-border/70">
+                            <span class="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            </span>
+                            <h2 class="text-base font-bold text-white" data-i18n="secEnergy">2. إعدادات الطاقة (Energy)</h2>
+                        </div>
+
+                        <div class="space-y-3.5">
+                            <!-- وقت الطباعة (ساعات ودقائق) -->
+                            <div>
+                                <label class="block text-xs font-medium text-bambu-green font-semibold mb-1.5" data-i18n="lblPrintTime">وقت الطباعة (Print time)</label>
+                                <div class="grid grid-cols-2 gap-2.5">
+                                    <div class="relative">
+                                        <input type="number" id="printHours" value="0" min="0" step="1" class="calc-input w-full bg-bambu-inputBg border border-bambu-green/50 rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                        <span class="absolute inset-y-0 end-2.5 flex items-center text-xs text-bambu-textMuted" data-i18n="unitHours">ساعة</span>
+                                    </div>
+                                    <div class="relative">
+                                        <input type="number" id="printMinutes" value="0" min="0" max="59" step="1" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                        <span class="absolute inset-y-0 end-2.5 flex items-center text-xs text-bambu-textMuted" data-i18n="unitMinutes">دقيقة</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2.5">
+                                <!-- استهلاك الطابعة بالواط -->
+                                <div>
+                                    <label for="printerPower" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblPrinterPower">الاستهلاك (واط)</label>
+                                    <div class="relative">
+                                        <input type="number" id="printerPower" value="130" min="0" step="5" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                        <span class="absolute inset-y-0 end-2.5 flex items-center text-xs text-bambu-textMuted font-mono">W</span>
+                                    </div>
+                                </div>
+
+                                <!-- تعرفة الكهرباء -->
+                                <div>
+                                    <label for="electricityRate" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblElecRate">التعرفة (/kWh)</label>
+                                    <div class="relative">
+                                        <input type="number" id="electricityRate" value="0.16" min="0" step="0.01" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3 py-2 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                        <span class="currency-symbol absolute inset-y-0 end-2.5 flex items-center text-xs text-bambu-textMuted font-mono">$</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- 3. استهلاك الماكينة (Machine Wear) -->
+                    <section class="bg-bambu-cardBg border border-bambu-border rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between mb-4 pb-3 border-b border-bambu-border/70">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="w-8 h-8 rounded-lg bg-sky-500/15 text-sky-400 flex items-center justify-center">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                    </span>
+                                    <h2 class="text-base font-bold text-white" data-i18n="secWear">3. استهلاك الماكينة</h2>
+                                </div>
+                                <span class="text-xs font-mono text-bambu-textMuted" id="hourlyWearBadge">$0.14 / hr</span>
+                            </div>
+
+                            <div class="space-y-3.5">
+                                <!-- سعر الطابعة -->
+                                <div>
+                                    <label for="printerCost" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblPrinterCost">سعر الطابعة (Printer cost)</label>
+                                    <div class="relative">
+                                        <input type="number" id="printerCost" value="700" min="0" step="10" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3.5 py-2 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                        <span class="currency-symbol absolute inset-y-0 end-3 flex items-center text-xs text-bambu-textMuted font-mono">$</span>
+                                    </div>
+                                </div>
+
+                                <!-- العمر الافتراضي -->
+                                <div>
+                                    <label for="lifespan" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblLifespan">العمر الافتراضي المتوقع (ساعة)</label>
+                                    <div class="relative">
+                                        <input type="number" id="lifespan" value="5000" min="1" step="100" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3.5 py-2 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                        <span class="absolute inset-y-0 end-3 flex items-center text-xs text-bambu-textMuted font-mono">hrs</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- 4. المخرجات والتكاليف الإضافية والتسعير (Output, Overhead & Pricing) -->
+                <section class="bg-bambu-cardBg border border-bambu-border rounded-2xl p-5 shadow-lg">
+                    <div class="flex items-center gap-2.5 mb-4 pb-3 border-b border-bambu-border/70">
+                        <span class="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>
+                        </span>
+                        <h2 class="text-base font-bold text-white" data-i18n="secOutput">4. المخرجات والتكاليف الإضافية والتسعير</h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        <!-- عدد النسخ -->
+                        <div>
+                            <label for="copies" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblCopies">عدد النسخ بالصينية</label>
+                            <div class="relative">
+                                <input type="number" id="copies" value="1" min="1" step="1" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                <span class="absolute inset-y-0 end-2.5 flex items-center text-xs text-bambu-textMuted" data-i18n="unitPcs">قطعة</span>
+                            </div>
+                        </div>
+
+                        <!-- نسبة الفشل -->
+                        <div>
+                            <label for="failureRate" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblFailureRate">نسبة الفشل (Failure %)</label>
+                            <div class="relative">
+                                <input type="number" id="failureRate" value="10" min="0" max="100" step="1" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                <span class="absolute inset-y-0 end-3 flex items-center text-xs text-bambu-textMuted font-mono">%</span>
+                            </div>
+                        </div>
+
+                        <!-- تكلفة التغليف -->
+                        <div>
+                            <label for="packagingCost" class="block text-xs font-medium text-gray-300 mb-1.5" data-i18n="lblPackaging">تكلفة التغليف / قطعة</label>
+                            <div class="relative">
+                                <input type="number" id="packagingCost" value="0" min="0" step="0.1" class="calc-input w-full bg-bambu-inputBg border border-bambu-border rounded-xl px-3 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                <span class="currency-symbol absolute inset-y-0 end-3 flex items-center text-xs text-bambu-textMuted font-mono">$</span>
+                            </div>
+                        </div>
+
+                        <!-- هامش الربح -->
+                        <div>
+                            <label for="profitMargin" class="block text-xs font-medium text-emerald-400 mb-1.5" data-i18n="lblProfitMargin">هامش الربح المقترح (%)</label>
+                            <div class="relative">
+                                <input type="number" id="profitMargin" value="100" min="0" step="5" class="calc-input w-full bg-bambu-inputBg border border-emerald-500/40 rounded-xl px-3 py-2.5 text-white font-mono text-sm focus:outline-none focus:border-bambu-green">
+                                <span class="absolute inset-y-0 end-3 flex items-center text-xs text-emerald-400 font-mono">%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- أزرار سريعة لهامش الربح -->
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <span class="text-xs text-bambu-textMuted" data-i18n="quickMarkup">مضاعفات سريعة:</span>
+                        <button type="button" data-margin="50" class="margin-preset text-xs bg-bambu-inputBg hover:bg-bambu-border border border-bambu-border px-2.5 py-1 rounded-lg text-gray-300 transition cursor-pointer font-mono">+50% (1.5x)</button>
+                        <button type="button" data-margin="100" class="margin-preset text-xs bg-bambu-green/20 border border-bambu-green/50 px-2.5 py-1 rounded-lg text-bambu-green transition cursor-pointer font-mono">+100% (2x)</button>
+                        <button type="button" data-margin="200" class="margin-preset text-xs bg-bambu-inputBg hover:bg-bambu-border border border-bambu-border px-2.5 py-1 rounded-lg text-gray-300 transition cursor-pointer font-mono">+200% (3x)</button>
+                        <button type="button" data-margin="300" class="margin-preset text-xs bg-bambu-inputBg hover:bg-bambu-border border border-bambu-border px-2.5 py-1 rounded-lg text-gray-300 transition cursor-pointer font-mono">+300% (4x)</button>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- العمود الجانبي: لوحة النتائج والرسوم البيانية (5 أعمدة) -->
+            <div class="lg:col-span-5 lg:sticky lg:top-22 space-y-5">
+                
+                <!-- بطاقة الملخص المالي الرئيسي -->
+                <div class="bg-bambu-cardBg border border-bambu-border rounded-2xl p-6 shadow-xl bambu-glow">
+                    <div class="flex items-center justify-between mb-5">
+                        <h2 class="text-base font-bold text-white" data-i18n="secResults">ملخص التكلفة والتسعير</h2>
+                        <span id="totalWeightBadge" class="text-xs font-mono bg-bambu-inputBg border border-bambu-border px-2.5 py-1 rounded-lg text-gray-300">0 g | 0.0 hrs</span>
+                    </div>
+
+                    <!-- بطاقتا السعر النهائي والتكلفة الصافية -->
+                    <div class="grid grid-cols-2 gap-3.5 mb-6">
+                        <!-- التكلفة الصافية للقطعة -->
+                        <div class="bg-bambu-inputBg/90 border border-bambu-border rounded-xl p-4">
+                            <p class="text-xs text-bambu-textMuted mb-1" data-i18n="resUnitCost">التكلفة الصافية / قطعة</p>
+                            <div class="text-2xl sm:text-3xl font-extrabold text-white font-mono tracking-tight" id="resCostPerPiece">$0.00</div>
+                            <p class="text-[11px] text-bambu-textMuted mt-1 font-mono" id="resBatchTotal">الدفعة: $0.00</p>
+                        </div>
+
+                        <!-- سعر البيع المقترح للقطعة -->
+                        <div class="bg-gradient-to-br from-bambu-green/20 to-emerald-900/20 border border-bambu-green/50 rounded-xl p-4">
+                            <p class="text-xs text-emerald-300 font-medium mb-1" data-i18n="resSellingPrice">سعر البيع المقترح</p>
+                            <div class="text-2xl sm:text-3xl font-extrabold text-bambu-green font-mono tracking-tight" id="resSuggestedPrice">$0.00</div>
+                            <p class="text-[11px] text-emerald-300/80 mt-1 font-mono" id="resNetProfit">الربح: +$0.00</p>
+                        </div>
+                    </div>
+
+                    <!-- المخطط الدائري وتفاصيل التكاليف (Donut Chart & Breakdown) -->
+                    <div class="bg-bambu-darkBg/60 border border-bambu-border/80 rounded-xl p-4 mb-5">
+                        <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-4" data-i18n="chartTitle">توزيع عناصر التكلفة (Cost Breakdown)</h3>
+                        
+                        <div class="flex flex-col sm:flex-row items-center gap-5">
+                            <!-- رسم SVG الدائري -->
+                            <div class="relative w-32 h-32 flex-shrink-0">
+                                <svg viewBox="0 0 36 36" class="w-full h-full -rotate-90">
+                                    <!-- خلفية الحلقة -->
+                                    <circle cx="18" cy="18" r="14" fill="transparent" stroke="#25282E" stroke-width="4.2"></circle>
+                                    <!-- شريحة المادة (أخضر) -->
+                                    <circle id="segMaterial" class="donut-segment" cx="18" cy="18" r="14" fill="transparent" stroke="#00AE42" stroke-width="4.2" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+                                    <!-- شريحة الكهرباء (أصفر/برتقالي) -->
+                                    <circle id="segElectricity" class="donut-segment" cx="18" cy="18" r="14" fill="transparent" stroke="#F59E0B" stroke-width="4.2" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+                                    <!-- شريحة استهلاك الماكينة (أزرق) -->
+                                    <circle id="segWear" class="donut-segment" cx="18" cy="18" r="14" fill="transparent" stroke="#38BDF8" stroke-width="4.2" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+                                    <!-- شريحة التغليف (بنفسجي) -->
+                                    <circle id="segPackaging" class="donut-segment" cx="18" cy="18" r="14" fill="transparent" stroke="#A855F7" stroke-width="4.2" stroke-dasharray="0 100" stroke-dashoffset="0"></circle>
+                                </svg>
+                                <div class="absolute inset-0 flex flex-col items-center justify-center text-center">
+                                    <span class="text-[10px] text-bambu-textMuted" data-i18n="chartCenter">للقطعة</span>
+                                    <span id="chartCenterValue" class="text-xs font-bold text-white font-mono">$0.00</span>
+                                </div>
+                            </div>
+
+                            <!-- قائمة التفاصيل بالأرقام والنسب -->
+                            <div class="w-full space-y-2.5 text-xs">
+                                <!-- المادة -->
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-[#00AE42]"></span>
+                                        <span class="text-gray-300" data-i18n="itemMaterial">تكلفة المادة (الفيلمنت)</span>
+                                    </div>
+                                    <div class="font-mono text-white">
+                                        <span id="valMaterial">$0.00</span>
+                                        <span id="pctMaterial" class="text-bambu-textMuted text-[11px] ms-1">(0%)</span>
+                                    </div>
+                                </div>
+
+                                <!-- الكهرباء -->
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-[#F59E0B]"></span>
+                                        <span class="text-gray-300" data-i18n="itemElectricity">تكلفة الكهرباء</span>
+                                    </div>
+                                    <div class="font-mono text-white">
+                                        <span id="valElectricity">$0.00</span>
+                                        <span id="pctElectricity" class="text-bambu-textMuted text-[11px] ms-1">(0%)</span>
+                                    </div>
+                                </div>
+
+                                <!-- استهلاك الماكينة -->
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-[#38BDF8]"></span>
+                                        <span class="text-gray-300" data-i18n="itemWear">استهلاك الطابعة</span>
+                                    </div>
+                                    <div class="font-mono text-white">
+                                        <span id="valWear">$0.00</span>
+                                        <span id="pctWear" class="text-bambu-textMuted text-[11px] ms-1">(0%)</span>
+                                    </div>
+                                </div>
+
+                                <!-- التغليف -->
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="w-2.5 h-2.5 rounded-full bg-[#A855F7]"></span>
+                                        <span class="text-gray-300" data-i18n="itemPackaging">التغليف</span>
+                                    </div>
+                                    <div class="font-mono text-white">
+                                        <span id="valPackaging">$0.00</span>
+                                        <span id="pctPackaging" class="text-bambu-textMuted text-[11px] ms-1">(0%)</span>
+                                    </div>
+                                </div>
+
+                                <!-- هامش الفشل المضاف -->
+                                <div class="pt-2 border-t border-bambu-border/60 flex items-center justify-between text-[11px] text-bambu-textMuted">
+                                    <span data-i18n="itemFailureIncluded">شامل احتياطي الفشل (<span id="lblFailurePct">10</span>%)</span>
+                                    <span id="valFailureExtra" class="font-mono">+$0.00</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- أزرار الإجراءات (نسخ، حفظ، إعادة تعيين) -->
+                    <div class="space-y-2.5">
+                        <button id="copySummaryBtn" type="button" class="w-full bg-bambu-green hover:bg-bambu-greenHover text-white font-bold py-3 px-4 rounded-xl transition flex items-center justify-center gap-2 shadow-lg shadow-bambu-green/20 cursor-pointer">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                            <span data-i18n="btnCopy">نسخ ملخص التكلفة</span>
+                        </button>
+
+                        <div class="grid grid-cols-2 gap-2.5">
+                            <button id="saveDefaultsBtn" type="button" class="bg-bambu-inputBg hover:bg-bambu-border border border-bambu-border text-gray-200 text-xs sm:text-sm font-semibold py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                <svg class="w-4 h-4 text-bambu-green" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                                <span data-i18n="btnSave">حفظ الإعدادات</span>
+                            </button>
+
+                            <button id="resetDefaultsBtn" type="button" class="bg-bambu-inputBg hover:bg-red-950/40 border border-bambu-border hover:border-red-500/40 text-gray-300 hover:text-red-300 text-xs sm:text-sm font-semibold py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-1.5 cursor-pointer">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                <span data-i18n="btnReset">إعادة تعيين</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <!-- التذييل (Footer) -->
+    <footer class="border-t border-bambu-border/60 py-4 mt-8 text-center text-xs text-bambu-textMuted">
+        <p data-i18n="footerText">حاسبة تكلفة الطباعة ثلاثية الأبعاد • جميع الحسابات تتم محلياً في متصفحك</p>
+    </footer>
+
+    <!-- المنطق البرمجي (JavaScript) -->
+    <script>
+        // القيم الافتراضية المعتمدة بناءً على طلب المستخدم
+        const FACTORY_DEFAULTS = {
+            spoolPrice: 22,
+            spoolWeight: 1000,
+            filamentUsed: 0,
+            amsEnabled: false,
+            purgeWaste: 0,
+            printHours: 0,
+            printMinutes: 0,
+            printerPower: 130,
+            electricityRate: 0.16,
+            printerCost: 700,
+            lifespan: 5000,
+            copies: 1,
+            failureRate: 10,
+            packagingCost: 0,
+            profitMargin: 100,
+            currency: '$'
+        };
+
+        const STORAGE_KEY = 'bambu_3d_calc_settings_v1';
+        let currentLang = 'ar';
+
+        // قاموس الترجمة (عربي / إنجليزي)
+        const translations = {
+            ar: {
+                appTitle: 'حاسبة تكلفة الطباعة ثلاثية الأبعاد',
+                appSubtitle: 'حساب دقيق لتكلفة الفيلمنت، الطاقة، استهلاك الطابعة، والتسعير',
+                secMaterial: '1. إعدادات المادة (Material Settings)',
+                lblSpoolPrice: 'سعر البكرة (Spool price)',
+                lblSpoolWeight: 'وزن البكرة (غ)',
+                lblFilamentUsed: 'الفيلمنت المستخدم (غ)',
+                lblMultiColor: 'الطباعة متعددة الألوان (Multi-color / AMS)',
+                lblAmsHint: 'إضافة هدر تغيير الألوان',
+                lblPurgeWaste: 'وزن هدر التنظيف / البرج (Purge waste)',
+                secEnergy: '2. إعدادات الطاقة (Energy)',
+                lblPrintTime: 'وقت الطباعة (Print time)',
+                unitHours: 'ساعة',
+                unitMinutes: 'دقيقة',
+                lblPrinterPower: 'الاستهلاك (واط)',
+                lblElecRate: 'التعرفة (/kWh)',
+                secWear: '3. استهلاك الماكينة',
+                lblPrinterCost: 'سعر الطابعة (Printer cost)',
+                lblLifespan: 'العمر الافتراضي المتوقع (ساعة)',
+                secOutput: '4. المخرجات والتكاليف الإضافية والتسعير',
+                lblCopies: 'عدد النسخ بالصينية',
+                unitPcs: 'قطعة',
+                lblFailureRate: 'نسبة الفشل (Failure %)',
+                lblPackaging: 'تكلفة التغليف / قطعة',
+                lblProfitMargin: 'هامش الربح المقترح (%)',
+                quickMarkup: 'مضاعفات سريعة:',
+                secResults: 'ملخص التكلفة والتسعير',
+                resUnitCost: 'التكلفة الصافية / قطعة',
+                resSellingPrice: 'سعر البيع المقترح',
+                chartTitle: 'توزيع عناصر التكلفة (Cost Breakdown)',
+                chartCenter: 'للقطعة',
+                itemMaterial: 'تكلفة المادة (الفيلمنت)',
+                itemElectricity: 'تكلفة الكهرباء',
+                itemWear: 'استهلاك الطابعة',
+                itemPackaging: 'التغليف',
+                btnCopy: 'نسخ ملخص التكلفة',
+                btnSave: 'حفظ الإعدادات',
+                btnReset: 'إعادة تعيين',
+                footerText: 'حاسبة تكلفة الطباعة ثلاثية الأبعاد • جميع الحسابات تتم محلياً في متصفحك',
+                toastCopied: 'تم نسخ ملخص التكلفة إلى الحافظة!',
+                toastSaved: 'تم حفظ الإعدادات الافتراضية في المتصفح!',
+                toastReset: 'تمت إعادة تعيين جميع القيم إلى الافتراضي (0 غرام، 0 ساعة، 10% فشل)',
+                batchPrefix: 'الدفعة: ',
+                profitPrefix: 'الربح: +',
+                failureText: 'شامل احتياطي الفشل'
+            },
+            en: {
+                appTitle: '3D Print Cost Calculator',
+                appSubtitle: 'Accurate calculation for filament, power, machine wear & pricing',
+                secMaterial: '1. Material Settings',
+                lblSpoolPrice: 'Spool price',
+                lblSpoolWeight: 'Spool weight (g)',
+                lblFilamentUsed: 'Filament used (g)',
+                lblMultiColor: 'Multi-color Printing (AMS)',
+                lblAmsHint: 'Include filament purge waste',
+                lblPurgeWaste: 'Purge & Tower waste (g)',
+                secEnergy: '2. Energy Settings',
+                lblPrintTime: 'Print time',
+                unitHours: 'hrs',
+                unitMinutes: 'min',
+                lblPrinterPower: 'Printer power (W)',
+                lblElecRate: 'Electricity rate (/kWh)',
+                secWear: '3. Machine Wear',
+                lblPrinterCost: 'Printer cost',
+                lblLifespan: 'Expected lifespan (hrs)',
+                secOutput: '4. Output, Overhead & Pricing',
+                lblCopies: 'Copies on plate',
+                unitPcs: 'pcs',
+                lblFailureRate: 'Failure rate (%)',
+                lblPackaging: 'Packaging cost / pc',
+                lblProfitMargin: 'Profit margin (%)',
+                quickMarkup: 'Quick markups:',
+                secResults: 'Cost & Pricing Summary',
+                resUnitCost: 'Net Cost / Piece',
+                resSellingPrice: 'Suggested Price',
+                chartTitle: 'Cost Breakdown',
+                chartCenter: 'Per Piece',
+                itemMaterial: 'Material (Filament)',
+                itemElectricity: 'Electricity',
+                itemWear: 'Machine Wear',
+                itemPackaging: 'Packaging',
+                btnCopy: 'Copy Cost Summary',
+                btnSave: 'Save Defaults',
+                btnReset: 'Reset Defaults',
+                footerText: '3D Print Cost Calculator • All calculations run locally in your browser',
+                toastCopied: 'Cost summary copied to clipboard!',
+                toastSaved: 'Default settings saved to browser!',
+                toastReset: 'Reset to factory defaults (0g, 0h, 10% failure)',
+                batchPrefix: 'Batch: ',
+                profitPrefix: 'Profit: +',
+                failureText: 'Includes failure buffer'
+            }
+        };
+
+        // جلب عناصر الإدخال
+        const el = {
+            spoolPrice: document.getElementById('spoolPrice'),
+            spoolWeight: document.getElementById('spoolWeight'),
+            filamentUsed: document.getElementById('filamentUsed'),
+            amsToggle: document.getElementById('amsToggle'),
+            amsWasteContainer: document.getElementById('amsWasteContainer'),
+            purgeWaste: document.getElementById('purgeWaste'),
+            printHours: document.getElementById('printHours'),
+            printMinutes: document.getElementById('printMinutes'),
+            printerPower: document.getElementById('printerPower'),
+            electricityRate: document.getElementById('electricityRate'),
+            printerCost: document.getElementById('printerCost'),
+            lifespan: document.getElementById('lifespan'),
+            copies: document.getElementById('copies'),
+            failureRate: document.getElementById('failureRate'),
+            packagingCost: document.getElementById('packagingCost'),
+            profitMargin: document.getElementById('profitMargin'),
+            currencySelect: document.getElementById('currencySelect')
+        };
+
+        // دالة إظهار الإشعارات
+        let toastTimeout;
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-message');
+            toastMsg.textContent = msg;
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // تنسيق العملة
+        function formatMoney(amount, currency) {
+            if (isNaN(amount) || !isFinite(amount)) amount = 0;
+            const formatted = amount.toFixed(2);
+            if (['$', '€', '£'].includes(currency)) {
+                return `${currency}${formatted}`;
+            }
+            return `${formatted} ${currency}`;
+        }
+
+        // الدالة الرئيسية للحساب وتحديث الواجهة
+        function calculate() {
+            const currency = el.currencySelect.value;
+            document.querySelectorAll('.currency-symbol').forEach(span => span.textContent = currency);
+
+            // قراءة القيم مع ضمان عدم وجود قيم سالبة أو غير صالحة
+            const spoolPrice = Math.max(0, parseFloat(el.spoolPrice.value) || 0);
+            const spoolWeight = Math.max(1, parseFloat(el.spoolWeight.value) || 1000);
+            const filamentUsed = Math.max(0, parseFloat(el.filamentUsed.value) || 0);
+            const amsEnabled = el.amsToggle.checked;
+            const purgeWaste = amsEnabled ? Math.max(0, parseFloat(el.purgeWaste.value) || 0) : 0;
+
+            const hours = Math.max(0, parseFloat(el.printHours.value) || 0);
+            const minutes = Math.max(0, parseFloat(el.printMinutes.value) || 0);
+            const totalHours = hours + (minutes / 60);
+
+            const printerPower = Math.max(0, parseFloat(el.printerPower.value) || 0);
+            const electricityRate = Math.max(0, parseFloat(el.electricityRate.value) || 0);
+
+            const printerCost = Math.max(0, parseFloat(el.printerCost.value) || 0);
+            const lifespan = Math.max(1, parseFloat(el.lifespan.value) || 5000);
+
+            const copies = Math.max(1, Math.floor(parseFloat(el.copies.value) || 1));
+            const failureRate = Math.max(0, parseFloat(el.failureRate.value) || 0);
+            const packagingCost = Math.max(0, parseFloat(el.packagingCost.value) || 0);
+            const profitMargin = Math.max(0, parseFloat(el.profitMargin.value) || 0);
+
+            // تحديث الشارات المساعدة (سعر الغرام وسعر الساعة)
+            const costPerGram = spoolPrice / spoolWeight;
+            const wearPerHour = printerCost / lifespan;
+            document.getElementById('gramPriceBadge').textContent = `${formatMoney(costPerGram, currency)} / g`;
+            document.getElementById('hourlyWearBadge').textContent = `${formatMoney(wearPerHour, currency)} / hr`;
+
+            // 1. تكلفة المادة للدفعة
+            const totalGrams = filamentUsed + purgeWaste;
+            const batchMaterialCost = (totalGrams / spoolWeight) * spoolPrice;
+
+            // 2. تكلفة الكهرباء للدفعة
+            const kWhUsed = (printerPower / 1000) * totalHours;
+            const batchElectricityCost = kWhUsed * electricityRate;
+
+            // 3. استهلاك الماكينة للدفعة
+            const batchWearCost = totalHours * wearPerHour;
+
+            // المجموع الفرعي قبل الفشل
+            const batchBaseCost = batchMaterialCost + batchElectricityCost + batchWearCost;
+
+            // معامل نسبة الفشل (مثلاً 10% => 1.10)
+            const failureMultiplier = 1 + (failureRate / 100);
+            const batchFailureExtra = batchBaseCost * (failureRate / 100);
+            const batchTotalWithFailure = batchBaseCost * failureMultiplier;
+
+            // التكاليف لكل قطعة واحدة (شاملة نسبة الفشل)
+            const unitMaterial = (batchMaterialCost * failureMultiplier) / copies;
+            const unitElectricity = (batchElectricityCost * failureMultiplier) / copies;
+            const unitWear = (batchWearCost * failureMultiplier) / copies;
+            const unitPackaging = packagingCost;
+
+            const totalCostPerPiece = (batchTotalWithFailure / copies) + unitPackaging;
+            const totalBatchAllIn = batchTotalWithFailure + (unitPackaging * copies);
+
+            // التسعير والربح
+            const suggestedSellingPrice = totalCostPerPiece * (1 + (profitMargin / 100));
+            const netProfitPerPiece = suggestedSellingPrice - totalCostPerPiece;
+
+            // تحديث البطاقات الرئيسية
+            document.getElementById('totalWeightBadge').textContent = `${totalGrams.toFixed(0)} g | ${totalHours.toFixed(1)} hrs`;
+            document.getElementById('resCostPerPiece').textContent = formatMoney(totalCostPerPiece, currency);
+            document.getElementById('resBatchTotal').textContent = `${translations[currentLang].batchPrefix}${formatMoney(totalBatchAllIn, currency)}`;
+            
+            document.getElementById('resSuggestedPrice').textContent = formatMoney(suggestedSellingPrice, currency);
+            document.getElementById('resNetProfit').textContent = `${translations[currentLang].profitPrefix}${formatMoney(netProfitPerPiece, currency)}`;
+            document.getElementById('chartCenterValue').textContent = formatMoney(totalCostPerPiece, currency);
+
+            // تحديث تفاصيل العناصر
+            document.getElementById('valMaterial').textContent = formatMoney(unitMaterial, currency);
+            document.getElementById('valElectricity').textContent = formatMoney(unitElectricity, currency);
+            document.getElementById('valWear').textContent = formatMoney(unitWear, currency);
+            document.getElementById('valPackaging').textContent = formatMoney(unitPackaging, currency);
+            
+            document.getElementById('lblFailurePct').textContent = failureRate;
+            document.getElementById('valFailureExtra').textContent = `+${formatMoney(batchFailureExtra / copies, currency)}`;
+
+            // تحديث الرسم البياني الدائري (Donut Chart)
+            updateDonutChart(unitMaterial, unitElectricity, unitWear, unitPackaging, totalCostPerPiece);
+        }
+
+        // تحديث نسب وأقواس الرسم البياني SVG
+        function updateDonutChart(mat, elec, wear, pack, total) {
+            // محيط الدائرة بنصف قطر 14 هو 2 * PI * 14 ≈ 87.96
+            const circumference = 2 * Math.PI * 14;
+            
+            if (total <= 0) {
+                ['segMaterial', 'segElectricity', 'segWear', 'segPackaging'].forEach(id => {
+                    document.getElementById(id).setAttribute('stroke-dasharray', `0 ${circumference}`);
+                });
+                ['pctMaterial', 'pctElectricity', 'pctWear', 'pctPackaging'].forEach(id => {
+                    document.getElementById(id).textContent = '(0%)';
+                });
+                return;
+            }
+
+            const pMat = (mat / total) * 100;
+            const pElec = (elec / total) * 100;
+            const pWear = (wear / total) * 100;
+            const pPack = (pack / total) * 100;
+
+            document.getElementById('pctMaterial').textContent = `(${Math.round(pMat)}%)`;
+            document.getElementById('pctElectricity').textContent = `(${Math.round(pElec)}%)`;
+            document.getElementById('pctWear').textContent = `(${Math.round(pWear)}%)`;
+            document.getElementById('pctPackaging').textContent = `(${Math.round(pPack)}%)`;
+
+            const lenMat = (pMat / 100) * circumference;
+            const lenElec = (pElec / 100) * circumference;
+            const lenWear = (pWear / 100) * circumference;
+            const lenPack = (pPack / 100) * circumference;
+
+            const segMat = document.getElementById('segMaterial');
+            const segElec = document.getElementById('segElectricity');
+            const segWear = document.getElementById('segWear');
+            const segPack = document.getElementById('segPackaging');
+
+            segMat.setAttribute('stroke-dasharray', `${lenMat} ${circumference}`);
+            segMat.setAttribute('stroke-dashoffset', '0');
+
+            segElec.setAttribute('stroke-dasharray', `${lenElec} ${circumference}`);
+            segElec.setAttribute('stroke-dashoffset', `${-lenMat}`);
+
+            segWear.setAttribute('stroke-dasharray', `${lenWear} ${circumference}`);
+            segWear.setAttribute('stroke-dashoffset', `${-(lenMat + lenElec)}`);
+
+            segPack.setAttribute('stroke-dasharray', `${lenPack} ${circumference}`);
+            segPack.setAttribute('stroke-dashoffset', `${-(lenMat + lenElec + lenWear)}`);
+        }
+
+        // تطبيق كائن إعدادات على الحقول
+        function applySettings(settings) {
+            el.spoolPrice.value = settings.spoolPrice;
+            el.spoolWeight.value = settings.spoolWeight;
+            el.filamentUsed.value = settings.filamentUsed;
+            el.amsToggle.checked = settings.amsEnabled;
+            el.purgeWaste.value = settings.purgeWaste;
+            el.printHours.value = settings.printHours;
+            el.printMinutes.value = settings.printMinutes;
+            el.printerPower.value = settings.printerPower;
+            el.electricityRate.value = settings.electricityRate;
+            el.printerCost.value = settings.printerCost;
+            el.lifespan.value = settings.lifespan;
+            el.copies.value = settings.copies;
+            el.failureRate.value = settings.failureRate;
+            el.packagingCost.value = settings.packagingCost;
+            el.profitMargin.value = settings.profitMargin;
+            el.currencySelect.value = settings.currency || '$';
+
+            toggleAmsVisibility();
+            calculate();
+        }
+
+        function toggleAmsVisibility() {
+            if (el.amsToggle.checked) {
+                el.amsWasteContainer.classList.remove('hidden');
+            } else {
+                el.amsWasteContainer.classList.add('hidden');
+            }
+        }
+
+        // تبديل اللغة (العربية <-> الإنجليزية)
+        function switchLanguage(lang) {
+            currentLang = lang;
+            const htmlTag = document.documentElement;
+            htmlTag.lang = lang;
+            htmlTag.dir = lang === 'ar' ? 'rtl' : 'ltr';
+            document.getElementById('langLabel').textContent = lang === 'ar' ? 'English' : 'العربية';
+
+            document.querySelectorAll('[data-i18n]').forEach(node => {
+                const key = node.getAttribute('data-i18n');
+                if (translations[lang][key]) {
+                    node.textContent = translations[lang][key];
+                }
+            });
+
+            // تحديث نص احتياطي الفشل ديناميكياً
+            const failureRate = el.failureRate.value || 0;
+            const failureSpan = document.querySelector('[data-i18n="itemFailureIncluded"]');
+            if (failureSpan) {
+                failureSpan.innerHTML = `${translations[lang].failureText} (<span id="lblFailurePct">${failureRate}</span>%)`;
+            }
+
+            calculate();
+        }
+
+        // مستمعو الأحداث (Event Listeners)
+        document.querySelectorAll('.calc-input').forEach(input => {
+            input.addEventListener('input', calculate);
+        });
+
+        el.currencySelect.addEventListener('change', calculate);
+
+        el.amsToggle.addEventListener('change', () => {
+            toggleAmsVisibility();
+            calculate();
+        });
+
+        // أزرار هامش الربح السريعة
+        document.querySelectorAll('.margin-preset').forEach(btn => {
+            btn.addEventListener('click', () => {
+                el.profitMargin.value = btn.getAttribute('data-margin');
+                calculate();
+            });
+        });
+
+        // زر تبديل اللغة
+        document.getElementById('langToggle').addEventListener('click', () => {
+            switchLanguage(currentLang === 'ar' ? 'en' : 'ar');
+        });
+
+        // زر حفظ الإعدادات في LocalStorage
+        document.getElementById('saveDefaultsBtn').addEventListener('click', () => {
+            try {
+                const currentSettings = {
+                    spoolPrice: parseFloat(el.spoolPrice.value) || 0,
+                    spoolWeight: parseFloat(el.spoolWeight.value) || 1000,
+                    filamentUsed: parseFloat(el.filamentUsed.value) || 0,
+                    amsEnabled: el.amsToggle.checked,
+                    purgeWaste: parseFloat(el.purgeWaste.value) || 0,
+                    printHours: parseFloat(el.printHours.value) || 0,
+                    printMinutes: parseFloat(el.printMinutes.value) || 0,
+                    printerPower: parseFloat(el.printerPower.value) || 130,
+                    electricityRate: parseFloat(el.electricityRate.value) || 0.16,
+                    printerCost: parseFloat(el.printerCost.value) || 700,
+                    lifespan: parseFloat(el.lifespan.value) || 5000,
+                    copies: parseInt(el.copies.value) || 1,
+                    failureRate: parseFloat(el.failureRate.value) || 10,
+                    packagingCost: parseFloat(el.packagingCost.value) || 0,
+                    profitMargin: parseFloat(el.profitMargin.value) || 100,
+                    currency: el.currencySelect.value
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(currentSettings));
+                showToast(translations[currentLang].toastSaved);
+            } catch (e) {
+                console.error(e);
+            }
+        });
+
+        // زر إعادة التعيين للقيم الافتراضية المطلوبة
+        document.getElementById('resetDefaultsBtn').addEventListener('click', () => {
+            try {
+                localStorage.removeItem(STORAGE_KEY);
+            } catch (e) {}
+            applySettings(FACTORY_DEFAULTS);
+            showToast(translations[currentLang].toastReset);
+        });
+
+        // زر نسخ ملخص التكلفة (باستخدام execCommand لضمان العمل داخل بيئة العرض)
+        document.getElementById('copySummaryBtn').addEventListener('click', () => {
+            const unitCost = document.getElementById('resCostPerPiece').textContent;
+            const sellPrice = document.getElementById('resSuggestedPrice').textContent;
+            const weightTime = document.getElementById('totalWeightBadge').textContent;
+            const mat = document.getElementById('valMaterial').textContent;
+            const elec = document.getElementById('valElectricity').textContent;
+            const wear = document.getElementById('valWear').textContent;
+            const pack = document.getElementById('valPackaging').textContent;
+
+            const summaryText = currentLang === 'ar'
+                ? `📊 ملخص تكلفة الطباعة ثلاثية الأبعاد:\n` +
+                  `• الوزن والوقت: ${weightTime}\n` +
+                  `• المادة: ${mat} | الكهرباء: ${elec} | الاستهلاك: ${wear} | التغليف: ${pack}\n` +
+                  `• التكلفة الصافية للقطعة (شامل ${el.failureRate.value}% فشل): ${unitCost}\n` +
+                  `• سعر البيع المقترح: ${sellPrice}`
+                : `📊 3D Print Cost Summary:\n` +
+                  `• Weight & Time: ${weightTime}\n` +
+                  `• Material: ${mat} | Power: ${elec} | Wear: ${wear} | Packaging: ${pack}\n` +
+                  `• Net Cost / Piece (incl. ${el.failureRate.value}% failure): ${unitCost}\n` +
+                  `• Suggested Selling Price: ${sellPrice}`;
+
+            const textArea = document.createElement('textarea');
+            textArea.value = summaryText;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-9999px';
+            document.body.appendChild(textArea);
+            textArea.select();
+            try {
+                document.execCommand('copy');
+                showToast(translations[currentLang].toastCopied);
+            } catch (err) {
+                console.error('Copy failed', err);
+            }
+            document.body.removeChild(textArea);
+        });
+
+        // التهيئة عند تحميل الصفحة
+        window.addEventListener('DOMContentLoaded', () => {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    applySettings({ ...FACTORY_DEFAULTS, ...JSON.parse(saved) });
+                } else {
+                    applySettings(FACTORY_DEFAULTS);
+                }
+            } catch (e) {
+                applySettings(FACTORY_DEFAULTS);
+            }
+        });
+    </script>
+    <script>
+      if ("serviceWorker" in navigator && location.protocol !== "file:") {
+        window.addEventListener("load", () => {
+          navigator.serviceWorker.register("./sw.js").catch(err => console.warn("SW registration failed:", err));
+        });
+      }
+    </script>
+</body>
+</html>
