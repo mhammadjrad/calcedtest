@@ -1,10 +1,10 @@
-const CACHE_NAME = "3d-print-calculator-v1";
+const CACHE_NAME = "3d-print-calculator-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png"
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", event => {
@@ -18,7 +18,10 @@ self.addEventListener("install", event => {
 self.addEventListener("activate", event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))))
+      .then(keys => Promise.all(
+        keys.filter(key => key.startsWith("3d-print-calculator-") && key !== CACHE_NAME)
+            .map(key => caches.delete(key))
+      ))
       .then(() => self.clients.claim())
   );
 });
@@ -37,16 +40,6 @@ self.addEventListener("fetch", event => {
         }
         return response;
       }).catch(() => caches.match(request).then(cached => cached || caches.match("./index.html")))
-    );
-  } else if (request.destination === "script" || request.destination === "style" || request.destination === "font") {
-    event.respondWith(
-      caches.match(request).then(cached => cached || fetch(request).then(response => {
-        if (response && (response.ok || response.type === "opaque")) {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
-        }
-        return response;
-      }))
     );
   }
 });
